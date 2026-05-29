@@ -1,0 +1,34 @@
+name: Newsac Crawler Automation
+
+on:
+  schedule:
+    # 한국 시간(KST)으로 새벽 2시, 오전 8시, 오후 2시, 저녁 8시 등 6시간마다 자동 실행
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # 사용자가 원할 때 수동으로 실행할 수 있는 버튼 활성화
+
+jobs:
+  run-crawler:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 2. 파이썬 환경 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 3. 필수 패키지 및 크롬(Playwright) 설치
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 gspread google-auth schedule python-dotenv playwright
+          python -m playwright install chromium
+
+      - name: 4. 크롤러 실행 및 텔레그램 발송
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
