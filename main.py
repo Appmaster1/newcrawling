@@ -38,7 +38,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_CON
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 GOOGLE_WORKSHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME", "newsac_programs")
 
-# 텔레그램 설정으로 변경
+# 텔레그램 연동 변수 설정
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
@@ -597,7 +597,7 @@ def collect_detail(detail_url: str) -> dict:
         logging.warning(
             "상세 페이지 Playwright 추출 결과가 부족함. requests 방식 재시도: %s",
             sanitize_url_for_log(detail_url),
-        )
+            )
 
     except Exception as exc:
         logging.warning(
@@ -852,7 +852,7 @@ def upsert_programs_to_sheet(programs: list[dict]) -> dict:
 
 
 # =========================
-# 텔레그램 알림 시스템으로 교체
+# 텔레그램 알림 시스템
 # =========================
 
 def send_telegram_message(message: str) -> None:
