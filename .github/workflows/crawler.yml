@@ -2,9 +2,9 @@ name: Newsac Crawler Automation
 
 on:
   schedule:
-    # 한국 시간(KST)으로 새벽 2시, 오전 8시, 오후 2시, 저녁 8시 등 6시간마다 자동 실행
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # 사용자가 원할 때 수동으로 실행할 수 있는 버튼 활성화
+    # 5분마다 자동으로 크롤러가 깨어나서 새 글을 확인합니다.
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # 수동 실행 버튼 활성화
 
 jobs:
   run-crawler:
