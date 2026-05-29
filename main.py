@@ -38,12 +38,13 @@ GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_CON
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 GOOGLE_WORKSHEET_NAME = os.getenv("GOOGLE_WORKSHEET_NAME", "newsac_programs")
 
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+# 텔레그램 설정으로 변경
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
 RUN_INTERVAL_MINUTES = int(os.getenv("RUN_INTERVAL_MINUTES", "0"))
 USE_PLAYWRIGHT_FALLBACK = os.getenv("USE_PLAYWRIGHT_FALLBACK", "true").lower() == "true"
 
-# 최대 몇 페이지까지 순회할지 설정
-# .env에 MAX_PAGES=50 같은 식으로 조절 가능
 MAX_PAGES = int(os.getenv("MAX_PAGES", "50"))
 
 REQUEST_TIMEOUT = 15
@@ -145,11 +146,6 @@ def make_absolute_url(href: str) -> str:
 
 
 def build_list_url(page_number: int) -> str:
-    """
-    LIST_URL의 page 값을 원하는 페이지 번호로 교체한다.
-    예:
-    page=1 -> page=2
-    """
     if re.search(r"([?&])page=\d+", LIST_URL):
         return re.sub(r"([?&])page=\d+", rf"\g<1>page={page_number}", LIST_URL)
 
@@ -167,12 +163,6 @@ def fetch_list_html_by_requests() -> str:
 
 
 def parse_list_from_html(html: str) -> list[dict]:
-    """
-    requests 방식 목록 추출.
-    현재 사이트는 실제 상세 링크 href가 '#'로 잡히는 구조라,
-    이 함수만으로는 대부분 목록을 완전히 추출하지 못한다.
-    Playwright fallback을 기본으로 사용한다.
-    """
     soup = BeautifulSoup(html, "html.parser")
     results = []
 
@@ -211,13 +201,6 @@ def parse_list_from_html(html: str) -> list[dict]:
 
 
 def fetch_list_by_playwright() -> list[dict]:
-    """
-    Playwright로 목록 페이지를 렌더링한 뒤,
-    1페이지부터 마지막 페이지까지 순회하면서 각 프로그램 제목을 실제 클릭해 상세 URL을 얻는다.
-
-    이 사이트는 목록의 프로그램 제목 a 태그 href가 '#'로 되어 있으므로,
-    href를 읽는 방식으로는 상세 URL을 얻을 수 없다.
-    """
     if sync_playwright is None:
         raise RuntimeError(
             "playwright가 설치되어 있지 않습니다. "
@@ -271,8 +254,6 @@ def fetch_list_by_playwright() -> list[dict]:
                         title = ""
                         list_education_target = ""
 
-                        # 컬럼 기준:
-                        # 번호 / 상태 / 유형 / 프로그램 제목 / 운영권역 / 학교급 / 프로그램 소양 / 교육 대상
                         if cell_count >= 8:
                             title = normalize_text(cells.nth(3).inner_text())
                             list_education_target = normalize_text(cells.nth(7).inner_text())
@@ -348,7 +329,6 @@ def fetch_list_by_playwright() -> list[dict]:
                                 list_education_target,
                             )
 
-                        # 다음 행 처리를 위해 현재 목록 페이지로 복귀
                         page.goto(list_url, wait_until="networkidle", timeout=30000)
                         page.wait_for_timeout(3000)
 
@@ -436,10 +416,6 @@ def extract_detail_fields_from_text(body_text: str) -> dict:
         "organization_info": "",
     }
 
-    # =========================
-    # 1. 상단 핵심 정보 추출
-    # =========================
-
     label_defs = [
         ("application_period", r"신청\s*기간"),
         ("education_period", r"교육\s*기간"),
@@ -499,10 +475,6 @@ def extract_detail_fields_from_text(body_text: str) -> dict:
 
         result[current["field"]] = value
 
-    # =========================
-    # 2. 하단 문의처 추출
-    # =========================
-
     contact_idx = text.rfind("문의처")
     org_idx = text.rfind("기관 정보")
 
@@ -527,10 +499,6 @@ def extract_detail_fields_from_text(body_text: str) -> dict:
                 contact_text = normalize_text(contact_text[:stop_index])
 
         result["contact"] = contact_text
-
-    # =========================
-    # 3. 하단 기관 정보 추출
-    # =========================
 
     if org_idx >= 0:
         org_text = text[org_idx + len("기관 정보"):]
@@ -884,24 +852,26 @@ def upsert_programs_to_sheet(programs: list[dict]) -> dict:
 
 
 # =========================
-# 알림
+# 텔레그램 알림 시스템으로 교체
 # =========================
 
-def send_discord_message(message: str) -> None:
-    if not DISCORD_WEBHOOK_URL:
+def send_telegram_message(message: str) -> None:
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("텔레그램 토큰 또는 채팅 ID가 설정되지 않아 알림을 건너뜁니다.")
         return
 
     try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         response = requests.post(
-            DISCORD_WEBHOOK_URL,
-            json={"content": message},
+            url,
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message},
             timeout=REQUEST_TIMEOUT,
         )
         response.raise_for_status()
-        logging.info("Discord 알림 발송 완료")
+        logging.info("Telegram 알림 발송 완료")
 
     except requests.RequestException as exc:
-        logging.warning("Discord 알림 발송 실패: %s", str(exc))
+        logging.warning("Telegram 알림 발송 실패: %s", str(exc))
 
 
 def notify_changes(result: dict) -> None:
@@ -910,25 +880,25 @@ def notify_changes(result: dict) -> None:
 
     for item in new_items:
         message = (
-            "[디지털새싹 새 프로그램 발견]\n"
-            f"제목: {item.get('title', '')}\n"
-            f"신청 기간: {item.get('application_period', '')}\n"
-            f"교육 기간: {item.get('education_period', '')}\n"
-            f"교육 대상: {item.get('education_target', '')}\n"
-            f"상세 URL: {item.get('detail_url', '')}"
+            "[디지털새싹 새 프로그램 발견]\n\n"
+            f"📌 제목: {item.get('title', '')}\n"
+            f"📅 신청 기간: {item.get('application_period', '')}\n"
+            f"🏫 교육 기간: {item.get('education_period', '')}\n"
+            f"👤 교육 대상: {item.get('education_target', '')}\n"
+            f"🔗 상세 URL: {item.get('detail_url', '')}"
         )
-        send_discord_message(message)
+        send_telegram_message(message)
 
     for item in changed_items:
         message = (
-            "[디지털새싹 프로그램 변경 감지]\n"
-            f"제목: {item.get('title', '')}\n"
-            f"신청 기간: {item.get('application_period', '')}\n"
-            f"교육 기간: {item.get('education_period', '')}\n"
-            f"교육 대상: {item.get('education_target', '')}\n"
-            f"상세 URL: {item.get('detail_url', '')}"
+            "[디지털새싹 프로그램 변경 감지]\n\n"
+            f"📌 제목: {item.get('title', '')}\n"
+            f"📅 신청 기간: {item.get('application_period', '')}\n"
+            f"🏫 교육 기간: {item.get('education_period', '')}\n"
+            f"👤 교육 대상: {item.get('education_target', '')}\n"
+            f"🔗 상세 URL: {item.get('detail_url', '')}"
         )
-        send_discord_message(message)
+        send_telegram_message(message)
 
 
 # =========================
